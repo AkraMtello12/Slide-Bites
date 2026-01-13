@@ -10,6 +10,7 @@ interface RestaurantViewProps {
   isOrderLocked: boolean;
   onUpdateOrder: (restaurantId: string, items: OrderItem[], deliveryFee: number) => void;
   onToggleLock: (restaurantId: string, locked: boolean) => void;
+  onClearOrders: (restaurantId: string) => void;
   onBack: () => void;
 }
 
@@ -21,6 +22,7 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
   isOrderLocked,
   onUpdateOrder,
   onToggleLock,
+  onClearOrders,
   onBack
 }) => {
   const [activeUserId, setActiveUserId] = useState<string>('');
@@ -103,8 +105,8 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
         : "تحذير: سيتم حذف جميع طلبات الموظفين وتصفير القائمة. هل أنت متأكد؟";
 
       if (window.confirm(confirmMsg)) {
-          onUpdateOrder(restaurant.id, [], 0); // Clear items and fee
-          onToggleLock(restaurant.id, false); // Unlock
+          // Use the atomic clear function passed from App.tsx
+          onClearOrders(restaurant.id);
           setModalState('closed');
       }
   };

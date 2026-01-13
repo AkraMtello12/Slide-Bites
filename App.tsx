@@ -88,6 +88,11 @@ const App: React.FC = () => {
   const handleToggleLockOrder = (restaurantId: string, locked: boolean) => {
       api.updateRestaurantOrdersInDb(restaurantId, currentRestaurantOrders, currentDeliveryFee, locked);
   };
+  
+  const handleClearOrders = (restaurantId: string) => {
+      // Atomic update to clear items, fee, and unlock
+      api.updateRestaurantOrdersInDb(restaurantId, [], 0, false);
+  };
 
   const handleCastVote = (pollId: string, optionId: string, userId: string) => {
     const poll = polls.find(p => p.id === pollId);
@@ -218,6 +223,7 @@ const App: React.FC = () => {
           isOrderLocked={isOrderLocked}
           onUpdateOrder={handleUpdateOrder}
           onToggleLock={handleToggleLockOrder}
+          onClearOrders={handleClearOrders}
           onBack={() => {
             setSelectedRestaurantId(null);
             setCurrentView('home');
