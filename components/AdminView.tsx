@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Save, X, RotateCw, Image, LogOut } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, RotateCw, Image, LogOut, User as UserIcon } from 'lucide-react';
 import { Restaurant, User, MenuItem } from '../types';
 
 interface AdminViewProps {
@@ -117,7 +117,6 @@ const AdminView: React.FC<AdminViewProps> = ({
           id: `u-${Date.now()}`,
           name: newUserName,
           role: 'employee',
-          avatar: `https://picsum.photos/seed/${Date.now()}/200`
       });
       setNewUserName('');
   };
@@ -296,7 +295,9 @@ const AdminView: React.FC<AdminViewProps> = ({
                 {users.map(user => (
                     <div key={user.id} className="flex items-center justify-between p-3 hover:bg-brand-offwhite rounded-xl transition-colors">
                         <div className="flex items-center gap-3">
-                            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                            <div className="w-10 h-10 rounded-full bg-brand-light/20 flex items-center justify-center text-brand-dark">
+                                <UserIcon size={20} />
+                            </div>
                             <div>
                                 <p className="font-bold text-brand-dark">{user.name}</p>
                                 <p className="text-xs text-gray-500">{user.role === 'admin' ? 'مدير' : 'موظف'}</p>

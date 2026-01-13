@@ -67,19 +67,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setCurrentView, 
             </li>
           </ul>
         </nav>
-
-        {/* Only show profile if user is NOT the fallback 'guest' */}
-        {currentUser && currentUser.id !== 'guest' && (
-            <div className="p-4 border-t border-brand-light/20 bg-black/20">
-            <div className="flex items-center gap-3">
-                <img src={currentUser.avatar || "https://picsum.photos/40"} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-brand-light" />
-                <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold truncate">{currentUser.name}</p>
-                <p className="text-xs text-brand-light truncate">موظف</p>
-                </div>
-            </div>
-            </div>
-        )}
       </aside>
 
       {/* Main Content Area */}
