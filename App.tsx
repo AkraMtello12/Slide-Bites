@@ -27,6 +27,7 @@ const App: React.FC = () => {
   // Orders State: Current Active Restaurant Orders
   const [currentRestaurantOrders, setCurrentRestaurantOrders] = useState<OrderItem[]>([]);
   const [currentDeliveryFee, setCurrentDeliveryFee] = useState<number>(0);
+  const [isOrderLocked, setIsOrderLocked] = useState<boolean>(false);
   
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
 
@@ -63,14 +64,16 @@ const App: React.FC = () => {
   // --- Order Subscription (When viewing a restaurant) ---
   useEffect(() => {
     if (selectedRestaurantId) {
-        const unsubOrders = api.subscribeToRestaurantOrders(selectedRestaurantId, (items, fee) => {
+        const unsubOrders = api.subscribeToRestaurantOrders(selectedRestaurantId, (items, fee, locked) => {
             setCurrentRestaurantOrders(items);
             setCurrentDeliveryFee(fee);
+            setIsOrderLocked(locked);
         });
         return () => unsubOrders();
     } else {
         setCurrentRestaurantOrders([]);
         setCurrentDeliveryFee(0);
+        setIsOrderLocked(false);
     }
   }, [selectedRestaurantId]);
 
@@ -78,7 +81,12 @@ const App: React.FC = () => {
   // --- Handlers ---
 
   const handleUpdateOrder = (restaurantId: string, items: OrderItem[], deliveryFee: number) => {
-    api.updateRestaurantOrdersInDb(restaurantId, items, deliveryFee);
+    // We maintain the current lock state when updating items/fee
+    api.updateRestaurantOrdersInDb(restaurantId, items, deliveryFee, isOrderLocked);
+  };
+
+  const handleToggleLockOrder = (restaurantId: string, locked: boolean) => {
+      api.updateRestaurantOrdersInDb(restaurantId, currentRestaurantOrders, currentDeliveryFee, locked);
   };
 
   const handleCastVote = (pollId: string, optionId: string, userId: string) => {
@@ -207,7 +215,9 @@ const App: React.FC = () => {
           users={users}
           currentOrderItems={currentRestaurantOrders}
           currentDeliveryFee={currentDeliveryFee}
+          isOrderLocked={isOrderLocked}
           onUpdateOrder={handleUpdateOrder}
+          onToggleLock={handleToggleLockOrder}
           onBack={() => {
             setSelectedRestaurantId(null);
             setCurrentView('home');

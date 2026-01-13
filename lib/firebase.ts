@@ -107,21 +107,21 @@ export const voteOnPollInDb = async (pollId: string, updatedOptions: any[]) => {
 };
 
 // --- Orders Service ---
-// Updated to return deliveryFee as well
-export const subscribeToRestaurantOrders = (restaurantId: string, callback: (items: OrderItem[], deliveryFee: number) => void) => {
+// Updated to return deliveryFee AND isLocked status
+export const subscribeToRestaurantOrders = (restaurantId: string, callback: (items: OrderItem[], deliveryFee: number, isLocked: boolean) => void) => {
     const docRef = doc(db, ORDERS_COL, restaurantId);
     return onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            callback(data.items || [], data.deliveryFee || 0);
+            callback(data.items || [], data.deliveryFee || 0, data.isLocked || false);
         } else {
-            callback([], 0);
+            callback([], 0, false);
         }
     });
 };
 
-// Updated to save deliveryFee
-export const updateRestaurantOrdersInDb = async (restaurantId: string, items: OrderItem[], deliveryFee: number) => {
+// Updated to save isLocked
+export const updateRestaurantOrdersInDb = async (restaurantId: string, items: OrderItem[], deliveryFee: number, isLocked: boolean) => {
     const docRef = doc(db, ORDERS_COL, restaurantId);
-    await setDoc(docRef, { items, deliveryFee }, { merge: true });
+    await setDoc(docRef, { items, deliveryFee, isLocked }, { merge: true });
 };

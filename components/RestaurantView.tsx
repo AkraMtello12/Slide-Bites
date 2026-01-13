@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Minus, ShoppingBag, ChevronDown, Trash2, ArrowRight, Truck } from 'lucide-react';
+import { Plus, Minus, ShoppingBag, ChevronDown, ArrowRight, Truck, Edit3, CheckCircle, Receipt, X, Lock, StopCircle } from 'lucide-react';
 import { Restaurant, User, OrderItem, MenuItem } from '../types';
 
 interface RestaurantViewProps {
@@ -7,7 +7,9 @@ interface RestaurantViewProps {
   users: User[];
   currentOrderItems: OrderItem[];
   currentDeliveryFee: number;
+  isOrderLocked: boolean;
   onUpdateOrder: (restaurantId: string, items: OrderItem[], deliveryFee: number) => void;
+  onToggleLock: (restaurantId: string, locked: boolean) => void;
   onBack: () => void;
 }
 
@@ -16,15 +18,25 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
   users, 
   currentOrderItems, 
   currentDeliveryFee,
+  isOrderLocked,
   onUpdateOrder,
+  onToggleLock,
   onBack
 }) => {
   const [activeUserId, setActiveUserId] = useState<string>('');
+  const [modalState, setModalState] = useState<'closed' | 'review'>('closed');
   
+  // Note Editing State
+  const [editingNoteFor, setEditingNoteFor] = useState<{itemId: string, userId: string} | null>(null);
+  const [tempNote, setTempNote] = useState('');
+
   // Filter orders related to this restaurant only
   const myOrders = useMemo(() => currentOrderItems, [currentOrderItems]);
 
+  // --- Handlers ---
+
   const handleAddItem = (item: MenuItem) => {
+    if (isOrderLocked) return; // Prevention
     if (!activeUserId) {
       alert("الرجاء اختيار اسم الموظف أولاً");
       return;
@@ -49,13 +61,15 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
         menuItem: item,
         quantity: 1,
         userId: activeUserId,
-        userName: user.name
+        userName: user.name,
+        notes: ''
       });
     }
     onUpdateOrder(restaurant.id, newOrders, currentDeliveryFee);
   };
 
   const handleRemoveItem = (item: MenuItem, userId: string) => {
+     if (isOrderLocked) return; // Prevention
      const existingItemIndex = myOrders.findIndex(
       o => o.userId === userId && o.itemId === item.id
     );
@@ -74,10 +88,41 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
     onUpdateOrder(restaurant.id, newOrders, currentDeliveryFee);
   };
 
+  const handleOpenNoteEditor = (orderItem: OrderItem) => {
+      if (isOrderLocked) return;
+      setEditingNoteFor({ itemId: orderItem.itemId, userId: orderItem.userId });
+      setTempNote(orderItem.notes || '');
+  };
+
+  const handleSaveNote = () => {
+      if (!editingNoteFor) return;
+      
+      const newOrders = myOrders.map(order => {
+          if (order.userId === editingNoteFor.userId && order.itemId === editingNoteFor.itemId) {
+              return { ...order, notes: tempNote };
+          }
+          return order;
+      });
+      
+      onUpdateOrder(restaurant.id, newOrders, currentDeliveryFee);
+      setEditingNoteFor(null);
+      setTempNote('');
+  };
+
   const handleDeliveryFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (isOrderLocked) return;
       const val = parseInt(e.target.value) || 0;
       onUpdateOrder(restaurant.id, myOrders, val);
   };
+
+  const handleStopReceivingOrders = () => {
+      if (window.confirm("هل أنت متأكد من إيقاف استلام الطلبات؟ لن يتمكن أحد من التعديل بعد الآن.")) {
+          onToggleLock(restaurant.id, true);
+          setModalState('closed');
+      }
+  };
+
+  // --- Calculations ---
 
   // Grouping for Side Panel (Per User)
   const ordersByUser = useMemo(() => {
@@ -99,9 +144,9 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
     return grouped;
   }, [myOrders]);
 
-  // Aggregation for Bottom Panel (Total Items)
+  // Aggregation for Review Modal
   const aggregatedItems = useMemo(() => {
-    const agg: Record<string, { name: string, count: number, price: number }> = {};
+    const agg: Record<string, { name: string, count: number, price: number, notes: string[] }> = {};
     let grandFoodTotal = 0;
 
     myOrders.forEach(order => {
@@ -109,22 +154,35 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
         agg[order.itemId] = { 
           name: order.menuItem.name, 
           count: 0,
-          price: order.menuItem.price
+          price: order.menuItem.price,
+          notes: []
         };
       }
       agg[order.itemId].count += order.quantity;
+      if (order.notes) {
+          agg[order.itemId].notes.push(`${order.userName}: ${order.notes}`);
+      }
       grandFoodTotal += order.menuItem.price * order.quantity;
     });
 
     return { items: Object.values(agg), grandFoodTotal };
   }, [myOrders]);
 
-  // Calculate Delivery Split
   const distinctUsersCount = Object.keys(ordersByUser).length;
   const deliveryPerUser = distinctUsersCount > 0 ? currentDeliveryFee / distinctUsersCount : 0;
+  const grandTotal = aggregatedItems.grandFoodTotal + currentDeliveryFee;
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="flex flex-col h-full gap-6 relative">
+      
+      {/* Locked Status Banner (For Latecomers) */}
+      {isOrderLocked && (
+          <div className="bg-red-500 text-white p-3 text-center font-bold text-lg shadow-md animate-in slide-in-from-top flex items-center justify-center gap-2">
+              <Lock size={20} />
+              <span>طلبنا ومشي الحال! (الطلب مغلق)</span>
+          </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-brand-light/20">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -143,6 +201,7 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
               className="appearance-none bg-white text-brand-dark font-bold py-2 px-4 pr-8 rounded-lg border border-brand-light/30 focus:outline-none focus:ring-2 focus:ring-brand-dark cursor-pointer min-w-[200px]"
               value={activeUserId}
               onChange={(e) => setActiveUserId(e.target.value)}
+              disabled={isOrderLocked}
             >
               <option value="" disabled>اختر موظف...</option>
               {users.map(u => (
@@ -156,10 +215,10 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
 
       <div className="flex flex-col lg:flex-row gap-6 flex-1 overflow-hidden">
         {/* Menu Grid */}
-        <div className="flex-1 overflow-y-auto pb-48">
+        <div className="flex-1 overflow-y-auto pb-48 px-1">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {restaurant.menu.map(item => (
-              <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm border border-transparent hover:border-brand-light/50 transition-all group flex flex-col justify-between h-full">
+              <div key={item.id} className={`bg-white rounded-2xl p-4 shadow-sm border border-transparent transition-all group flex flex-col justify-between h-full ${isOrderLocked ? 'opacity-60 grayscale-[0.5]' : 'hover:border-brand-light/50'}`}>
                 <div>
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-bold text-lg text-brand-dark">{item.name}</h3>
@@ -173,14 +232,14 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
                 <button 
                   onClick={() => handleAddItem(item)}
                   className={`w-full py-2 rounded-xl flex items-center justify-center gap-2 font-bold transition-all ${
-                    activeUserId 
+                    activeUserId && !isOrderLocked
                     ? 'bg-brand-dark text-white hover:bg-brand-light hover:text-brand-dark' 
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
-                  disabled={!activeUserId}
+                  disabled={!activeUserId || isOrderLocked}
                 >
-                  <Plus size={18} />
-                  <span>إضافة للطلب</span>
+                  {isOrderLocked ? <Lock size={18} /> : <Plus size={18} />}
+                  <span>{isOrderLocked ? 'مغلق' : 'إضافة للطلب'}</span>
                 </button>
               </div>
             ))}
@@ -195,7 +254,7 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
               طلبات الموظفين
             </h3>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
             {Object.keys(ordersByUser).length === 0 ? (
                <div className="h-full flex flex-col items-center justify-center text-gray-400 text-center">
                  <ShoppingBag size={48} className="mb-2 opacity-20" />
@@ -205,31 +264,47 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
               Object.entries(ordersByUser).map(([userId, userOrder]) => {
                   const finalUserTotal = userOrder.foodTotal + deliveryPerUser;
                   return (
-                    <div key={userId} className={`bg-white rounded-xl p-3 border shadow-sm ${userId === activeUserId ? 'border-brand-light ring-1 ring-brand-light' : 'border-gray-100'}`}>
-                    <div className="flex justify-between items-center mb-2 border-b border-dashed border-gray-200 pb-2">
-                        <h4 className="font-bold text-brand-dark">{userOrder.name}</h4>
-                        <div className="text-left">
-                            <span className="text-sm font-bold text-brand-light block">{finalUserTotal.toLocaleString()}</span>
-                            {deliveryPerUser > 0 && (
-                                <span className="text-[10px] text-gray-400 block">(شامل التوصيل)</span>
-                            )}
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        {userOrder.items.map((orderItem, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-sm">
-                            <div className="flex items-center gap-2">
-                            <span className="bg-brand-offwhite text-brand-dark px-2 rounded text-xs">{orderItem.quantity}x</span>
-                            <span className="text-gray-700">{orderItem.menuItem.name}</span>
+                    <div key={userId} className={`bg-white rounded-xl p-3 border shadow-sm transition-all ${userId === activeUserId ? 'border-brand-light ring-1 ring-brand-light' : 'border-gray-100'}`}>
+                        <div className="flex justify-between items-center mb-2 border-b border-dashed border-gray-200 pb-2">
+                            <h4 className="font-bold text-brand-dark">{userOrder.name}</h4>
+                            <div className="text-left">
+                                <span className="text-sm font-bold text-brand-light block">{finalUserTotal.toLocaleString()}</span>
+                                {deliveryPerUser > 0 && (
+                                    <span className="text-[10px] text-gray-400 block">(شامل التوصيل)</span>
+                                )}
                             </div>
-                            {activeUserId === userId && (
-                                <button onClick={() => handleRemoveItem(orderItem.menuItem, userId)} className="text-red-400 hover:text-red-600">
-                                    <Minus size={14} />
-                                </button>
-                            )}
                         </div>
-                        ))}
-                    </div>
+                        <div className="space-y-3">
+                            {userOrder.items.map((orderItem, idx) => (
+                            <div key={idx} className="flex flex-col gap-1">
+                                <div className="flex justify-between items-start text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <span className="bg-brand-offwhite text-brand-dark px-2 rounded text-xs font-bold">{orderItem.quantity}x</span>
+                                        <span className="text-gray-700 font-medium">{orderItem.menuItem.name}</span>
+                                    </div>
+                                    {!isOrderLocked && activeUserId === userId && (
+                                        <div className="flex items-center gap-1">
+                                            <button 
+                                                onClick={() => handleOpenNoteEditor(orderItem)}
+                                                className={`p-1 rounded-full transition-colors ${orderItem.notes ? 'bg-yellow-100 text-yellow-600' : 'text-gray-300 hover:bg-gray-100 hover:text-gray-600'}`}
+                                                title="إضافة/تعديل ملاحظة"
+                                            >
+                                                <Edit3 size={14} />
+                                            </button>
+                                            <button onClick={() => handleRemoveItem(orderItem.menuItem, userId)} className="text-red-300 hover:text-red-500 hover:bg-red-50 p-1 rounded-full transition-colors">
+                                                <Minus size={14} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                                {orderItem.notes && (
+                                    <p className="text-[11px] text-gray-500 mr-8 bg-gray-50 p-1 rounded border-r-2 border-brand-accent pr-2">
+                                        {orderItem.notes}
+                                    </p>
+                                )}
+                            </div>
+                            ))}
+                        </div>
                     </div>
                   );
               })
@@ -238,54 +313,147 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
         </div>
       </div>
 
-      {/* Bottom Aggregation Summary (Sticky) */}
-      <div className="fixed bottom-0 left-0 right-0 bg-brand-dark text-white shadow-[0_-5px_20px_rgba(0,0,0,0.2)] z-50 p-4 md:mr-64 rounded-t-3xl transition-transform transform">
-        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row items-center justify-between gap-4">
-            <div className="flex-1 w-full overflow-x-auto">
-                <div className="flex items-center gap-4 min-w-max">
-                   <div className="font-bold text-brand-light border-l border-brand-light/30 pl-4 ml-2">
-                        ملخص الطلب الكلي:
-                   </div>
-                   {aggregatedItems.items.length === 0 && <span className="text-white/50 text-sm">السلة فارغة</span>}
-                   {aggregatedItems.items.map((agg, idx) => (
-                       <div key={idx} className="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full">
-                           <span className="font-bold text-brand-accent">{agg.count}</span>
-                           <span className="text-sm text-gray-200">{agg.name}</span>
-                       </div>
-                   ))}
-                </div>
+      {/* Bottom Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-brand-light/20 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-40 p-4 md:mr-64 rounded-t-3xl">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex flex-col">
+                <span className="text-sm text-gray-500">المجموع الكلي (مع التوصيل)</span>
+                <span className="text-3xl font-bold text-brand-dark font-mono">{grandTotal.toLocaleString()} <span className="text-base font-normal">ل.س</span></span>
             </div>
             
-            <div className="flex flex-wrap md:flex-nowrap items-center gap-6 border-t md:border-t-0 md:border-r border-white/20 pt-2 md:pt-0 md:pr-6 w-full md:w-auto justify-between md:justify-end">
-                
-                {/* Delivery Fee Input */}
-                <div className="flex items-center gap-2 bg-white/10 p-2 rounded-lg">
-                    <Truck size={18} className="text-brand-light"/>
-                    <div className="flex flex-col">
-                        <label className="text-[10px] text-gray-300">أجرة التوصيل</label>
-                        <input 
-                            type="number" 
-                            className="bg-transparent border-none outline-none text-white font-bold w-20 text-sm placeholder-gray-500"
-                            placeholder="0"
-                            value={currentDeliveryFee > 0 ? currentDeliveryFee : ''}
-                            onChange={handleDeliveryFeeChange}
-                        />
-                    </div>
-                </div>
-
-                <div className="text-left">
-                    <p className="text-xs text-brand-light">المجموع النهائي</p>
-                    <p className="text-2xl font-bold font-mono">{(aggregatedItems.grandFoodTotal + currentDeliveryFee).toLocaleString()} <span className="text-sm">ل.س</span></p>
-                </div>
-                <button 
-                  className="bg-brand-accent text-brand-dark font-bold px-6 py-3 rounded-xl hover:bg-yellow-400 transition-colors shadow-lg"
-                  onClick={() => alert("سيتم إرسال الطلب إلى المطعم (قريباً)")}
-                >
-                    تأكيد الطلب
-                </button>
-            </div>
+            <button 
+                onClick={() => setModalState('review')}
+                className="bg-brand-dark text-white px-8 py-3 rounded-xl font-bold hover:bg-brand-light hover:text-brand-dark transition-all shadow-lg flex items-center gap-2"
+            >
+                <Receipt size={20} />
+                <span>مراجعة الطلب</span>
+            </button>
         </div>
       </div>
+
+      {/* Note Editor Modal */}
+      {editingNoteFor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-[2px]">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-80 animate-in zoom-in-95 duration-200">
+                  <h3 className="font-bold text-brand-dark mb-4">إضافة ملاحظة للصنف</h3>
+                  <textarea 
+                    autoFocus
+                    className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-dark outline-none min-h-[100px] resize-none"
+                    placeholder="مثال: بدون مخلل، كتر طحينة..."
+                    value={tempNote}
+                    onChange={(e) => setTempNote(e.target.value)}
+                  />
+                  <div className="flex gap-2 mt-4">
+                      <button onClick={handleSaveNote} className="flex-1 bg-brand-dark text-white py-2 rounded-lg font-bold hover:bg-brand-light">حفظ</button>
+                      <button onClick={() => setEditingNoteFor(null)} className="flex-1 bg-gray-100 text-gray-500 py-2 rounded-lg font-bold hover:bg-gray-200">إلغاء</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Review Modal */}
+      {modalState === 'review' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+              <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                  {/* Modal Header */}
+                  <div className={`bg-brand-dark p-6 text-white flex justify-between items-center transition-colors duration-500`}>
+                      <div className="flex items-center gap-3">
+                          <Receipt size={32} />
+                          <div>
+                              <h2 className="text-2xl font-bold">ملخص الطلب النهائي</h2>
+                              <p className="text-white/80 text-sm">يرجى مراجعة التفاصيل</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setModalState('closed')} className="hover:bg-white/20 p-2 rounded-full transition-colors">
+                          <X size={24} />
+                      </button>
+                  </div>
+
+                  {/* Modal Body (Scrollable) */}
+                  <div className="flex-1 overflow-y-auto p-6 bg-gray-50 custom-scrollbar">
+                      {/* Aggregated List */}
+                      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                          <table className="w-full text-right">
+                              <thead className="bg-brand-offwhite text-brand-dark text-sm">
+                                  <tr>
+                                      <th className="p-4 font-bold">الصنف</th>
+                                      <th className="p-4 font-bold text-center">الكمية</th>
+                                      <th className="p-4 font-bold text-left">السعر الإفرادي</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                  {aggregatedItems.items.map((item, idx) => (
+                                      <tr key={idx} className="hover:bg-gray-50">
+                                          <td className="p-4">
+                                              <div className="font-bold text-gray-800">{item.name}</div>
+                                              {/* Show Aggregated Notes */}
+                                              {item.notes.length > 0 && (
+                                                  <div className="mt-2 space-y-1">
+                                                      {item.notes.map((note, nIdx) => (
+                                                          <div key={nIdx} className="text-[11px] text-gray-500 bg-yellow-50 inline-block px-2 py-0.5 rounded mr-1 border border-yellow-100">
+                                                              {note}
+                                                          </div>
+                                                      ))}
+                                                  </div>
+                                              )}
+                                          </td>
+                                          <td className="p-4 text-center">
+                                              <span className="bg-brand-dark text-white px-3 py-1 rounded-lg font-bold text-sm">{item.count}</span>
+                                          </td>
+                                          <td className="p-4 text-left font-mono text-gray-600">
+                                              {item.price.toLocaleString()}
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+
+                      {/* Delivery Fee Section */}
+                      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3 text-brand-dark">
+                              <Truck size={24} />
+                              <span className="font-bold">أجرة التوصيل</span>
+                          </div>
+                          {!isOrderLocked ? (
+                              <input 
+                                  type="number" 
+                                  className="bg-gray-100 border border-gray-300 rounded-lg p-2 w-24 text-center font-bold focus:ring-2 focus:ring-brand-dark outline-none"
+                                  placeholder="0"
+                                  value={currentDeliveryFee > 0 ? currentDeliveryFee : ''}
+                                  onChange={handleDeliveryFeeChange}
+                              />
+                          ) : (
+                              <span className="font-bold font-mono text-xl">{currentDeliveryFee.toLocaleString()}</span>
+                          )}
+                      </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="bg-white p-6 border-t border-gray-100 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+                      <div className="flex justify-between items-end mb-6">
+                          <span className="text-gray-500 font-bold">المجموع الكلي النهائي</span>
+                          <span className="text-4xl font-bold text-brand-dark font-mono tracking-tight">{grandTotal.toLocaleString()} <span className="text-lg text-gray-400">ل.س</span></span>
+                      </div>
+                      
+                      {!isOrderLocked ? (
+                          <button 
+                              onClick={handleStopReceivingOrders}
+                              className="w-full bg-red-500 text-white py-4 rounded-xl font-bold text-lg hover:bg-red-600 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                          >
+                              <StopCircle size={24} />
+                              <span>إيقاف استلام الطلبات (قفل القائمة)</span>
+                          </button>
+                      ) : (
+                          <div className="w-full bg-gray-100 text-gray-500 py-4 rounded-xl font-bold text-lg text-center flex items-center justify-center gap-2">
+                              <Lock size={20} />
+                              <span>الطلب مغلق حالياً</span>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

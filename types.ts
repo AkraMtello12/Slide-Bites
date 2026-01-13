@@ -28,6 +28,7 @@ export interface OrderItem {
   quantity: number;
   userId: string;
   userName: string;
+  notes?: string;
 }
 
 export interface RestaurantOrder {
