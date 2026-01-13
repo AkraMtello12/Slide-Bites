@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Minus, ShoppingBag, ChevronDown, ArrowRight, Truck, Edit3, CheckCircle, Receipt, X, Lock, StopCircle, Trash2, Trash } from 'lucide-react';
 import { Restaurant, User, OrderItem, MenuItem } from '../types';
 
 interface RestaurantViewProps {
   restaurant: Restaurant;
   users: User[];
+  currentUser: User;
   currentOrderItems: OrderItem[];
   currentDeliveryFee: number;
   isOrderLocked: boolean;
@@ -17,6 +18,7 @@ interface RestaurantViewProps {
 const RestaurantView: React.FC<RestaurantViewProps> = ({ 
   restaurant, 
   users, 
+  currentUser,
   currentOrderItems, 
   currentDeliveryFee,
   isOrderLocked,
@@ -25,8 +27,16 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
   onClearOrders,
   onBack
 }) => {
-  const [activeUserId, setActiveUserId] = useState<string>('');
+  // Initialize with the current user's ID so they don't have to search
+  const [activeUserId, setActiveUserId] = useState<string>(currentUser?.id || '');
   const [modalState, setModalState] = useState<'closed' | 'review'>('closed');
+  
+  // Update activeUserId if currentUser changes (e.g. if passed differently)
+  useEffect(() => {
+    if(currentUser) {
+        setActiveUserId(currentUser.id);
+    }
+  }, [currentUser]);
   
   // Note Editing State
   const [editingNoteFor, setEditingNoteFor] = useState<{itemId: string, userId: string} | null>(null);
@@ -249,7 +259,7 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
                       {item.price.toLocaleString()} ل.س
                     </span>
                   </div>
-                  <p className="text-gray-500 text-sm mb-4">{item.category}</p>
+                  {/* Removed Category display as requested */}
                 </div>
                 
                 <button 

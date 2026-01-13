@@ -5,12 +5,13 @@ import { Poll, User, VoteOption } from '../types';
 interface VotingViewProps {
   polls: Poll[];
   currentUser: User;
+  users: User[]; // Need full user list to lookup names
   onVote: (pollId: string, optionId: string, userId: string) => void;
   onCreatePoll: (poll: Poll) => void;
   onDeletePoll: (pollId: string) => void;
 }
 
-const VotingView: React.FC<VotingViewProps> = ({ polls, currentUser, onVote, onCreatePoll, onDeletePoll }) => {
+const VotingView: React.FC<VotingViewProps> = ({ polls, currentUser, users, onVote, onCreatePoll, onDeletePoll }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPollQuestion, setNewPollQuestion] = useState('');
   const [newPollOptions, setNewPollOptions] = useState(['', '']);
@@ -55,6 +56,14 @@ const VotingView: React.FC<VotingViewProps> = ({ polls, currentUser, onVote, onC
     return Math.round((optionVotes / totalVotes) * 100);
   };
 
+  // Helper to get names from IDs
+  const getVoterNames = (voterIds: string[]) => {
+      return voterIds.map(id => {
+          const u = users.find(user => user.id === id);
+          return u ? u.name : 'Unknown';
+      });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-8">
@@ -76,8 +85,6 @@ const VotingView: React.FC<VotingViewProps> = ({ polls, currentUser, onVote, onC
           const totalVotes = poll.options.reduce((acc, opt) => acc + opt.votes, 0);
           const userVotedOptionId = poll.options.find(o => o.voterIds.includes(currentUser.id))?.id;
           
-          // Allow deletion for everyone momentarily to fix the "can't delete seed data" issue
-          // In production, this should be: const canDelete = currentUser.id === poll.creatorId || currentUser.role === 'admin';
           const canDelete = true;
 
           return (
@@ -99,35 +106,48 @@ const VotingView: React.FC<VotingViewProps> = ({ polls, currentUser, onVote, onC
                </div>
               <h3 className="text-xl font-bold text-brand-dark mb-6">{poll.question}</h3>
               
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {poll.options.map(option => {
                   const percent = getPercentage(option.votes, totalVotes);
                   const isSelected = userVotedOptionId === option.id;
+                  const voterNames = getVoterNames(option.voterIds);
 
                   return (
-                    <button
-                      key={option.id}
-                      onClick={() => onVote(poll.id, option.id, currentUser.id)}
-                      className={`w-full relative h-12 rounded-xl overflow-hidden border transition-all ${isSelected ? 'border-brand-dark ring-1 ring-brand-dark' : 'border-gray-200 hover:border-brand-light'}`}
-                    >
-                      {/* Progress Bar Background */}
-                      <div 
-                        className="absolute top-0 right-0 h-full bg-brand-offwhite transition-all duration-500 ease-out"
-                        style={{ width: `${percent}%` }}
-                      />
-                      
-                      <div className="absolute inset-0 flex justify-between items-center px-4 z-10">
-                        <div className="flex items-center gap-2">
-                           {isSelected && <CheckCircle2 size={16} className="text-brand-dark" />}
-                           <span className={`font-medium ${isSelected ? 'text-brand-dark' : 'text-gray-700'}`}>{option.text}</span>
-                        </div>
-                        <span className="text-sm font-bold text-brand-dark">{percent}% ({option.votes})</span>
-                      </div>
-                    </button>
+                    <div key={option.id} className="group/option">
+                        <button
+                        onClick={() => onVote(poll.id, option.id, currentUser.id)}
+                        className={`w-full relative h-12 rounded-xl overflow-hidden border transition-all ${isSelected ? 'border-brand-dark ring-1 ring-brand-dark' : 'border-gray-200 hover:border-brand-light'}`}
+                        >
+                            {/* Progress Bar Background */}
+                            <div 
+                                className="absolute top-0 right-0 h-full bg-brand-offwhite transition-all duration-500 ease-out"
+                                style={{ width: `${percent}%` }}
+                            />
+                            
+                            <div className="absolute inset-0 flex justify-between items-center px-4 z-10">
+                                <div className="flex items-center gap-2">
+                                {isSelected && <CheckCircle2 size={16} className="text-brand-dark" />}
+                                <span className={`font-medium ${isSelected ? 'text-brand-dark' : 'text-gray-700'}`}>{option.text}</span>
+                                </div>
+                                <span className="text-sm font-bold text-brand-dark">{percent}% ({option.votes})</span>
+                            </div>
+                        </button>
+                        
+                        {/* Voter Names Display */}
+                        {voterNames.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2 px-2">
+                                {voterNames.map((name, idx) => (
+                                    <span key={idx} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md border border-gray-200">
+                                        {name}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                   );
                 })}
               </div>
-              <div className="mt-4 text-xs text-gray-400 text-left">
+              <div className="mt-6 text-xs text-gray-400 text-left pt-2 border-t border-dashed">
                  إجمالي الأصوات: {totalVotes}
               </div>
             </div>

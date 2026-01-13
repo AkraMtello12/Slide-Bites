@@ -4,7 +4,7 @@ import RestaurantView from './components/RestaurantView';
 import VotingView from './components/VotingView';
 import AdminView from './components/AdminView';
 import { User, Restaurant, Poll, OrderItem, ViewState } from './types';
-import { ArrowRight, Lock, Loader2, UserCircle } from 'lucide-react';
+import { ArrowRight, Lock, Loader2, UserCircle, ChevronDown } from 'lucide-react';
 import * as api from './lib/firebase';
 
 const App: React.FC = () => {
@@ -34,12 +34,11 @@ const App: React.FC = () => {
   // --- Initial Data Subscriptions ---
   useEffect(() => {
     const unsubUsers = api.subscribeToUsers((data) => {
-        // Filter out any user marked as 'admin' in DB from the general list if you want strict hiding,
-        // or simply rely on the UI not showing them.
+        // Filter out any user marked as 'admin' in DB from the general list
         const generalUsers = data.filter(u => u.role !== 'admin');
         setUsers(generalUsers);
         
-        // Auto-login first available employee
+        // Auto-select first available employee if none selected
         if (!currentUser && generalUsers.length > 0) {
             setCurrentUser(generalUsers[0]);
         }
@@ -59,7 +58,7 @@ const App: React.FC = () => {
         unsubRestaurants();
         unsubPolls();
     };
-  }, []); 
+  }, []); // Remove currentUser dependency to prevent loop, logic handled inside
 
   // --- Order Subscription (When viewing a restaurant) ---
   useEffect(() => {
@@ -81,7 +80,6 @@ const App: React.FC = () => {
   // --- Handlers ---
 
   const handleUpdateOrder = (restaurantId: string, items: OrderItem[], deliveryFee: number) => {
-    // We maintain the current lock state when updating items/fee
     api.updateRestaurantOrdersInDb(restaurantId, items, deliveryFee, isOrderLocked);
   };
 
@@ -90,7 +88,6 @@ const App: React.FC = () => {
   };
   
   const handleClearOrders = (restaurantId: string) => {
-      // Atomic update to clear items, fee, and unlock
       api.updateRestaurantOrdersInDb(restaurantId, [], 0, false);
   };
 
@@ -98,14 +95,10 @@ const App: React.FC = () => {
     const poll = polls.find(p => p.id === pollId);
     if (!poll) return;
 
-    // Check if user already voted in this poll
     const existingVoteOption = poll.options.find(opt => opt.voterIds.includes(userId));
-
     let updatedOptions = [...poll.options];
 
-    // If user previously voted...
     if (existingVoteOption) {
-        // Remove vote from the old option
         updatedOptions = updatedOptions.map(opt => {
             if (opt.id === existingVoteOption.id) {
                 return {
@@ -117,14 +110,12 @@ const App: React.FC = () => {
             return opt;
         });
 
-        // Logic: If they clicked the SAME option, we stop here (toggle off / un-vote).
         if (existingVoteOption.id === optionId) {
              api.voteOnPollInDb(pollId, updatedOptions);
              return;
         }
     }
 
-    // Add vote to the new option (if it wasn't a toggle-off)
     updatedOptions = updatedOptions.map(opt => {
         if (opt.id === optionId) {
             return {
@@ -187,10 +178,8 @@ const App: React.FC = () => {
       setAdminPassword('');
   };
 
-  // --- Time Based Greeting Logic ---
   const getGreeting = () => {
     const hour = new Date().getHours();
-    // Before 1 PM (13:00) -> Morning, After -> Evening
     return hour < 13 ? 'صباح الخير' : 'مساء الخير';
   };
 
@@ -205,9 +194,7 @@ const App: React.FC = () => {
       );
   }
 
-  // Fallback user if DB is empty to prevent crash
-  const fallbackUser: User = { id: 'guest', name: 'زائر', role: 'employee' };
-  const activeUser = currentUser || users[0] || fallbackUser;
+  const activeUser = currentUser || { id: 'guest', name: 'زائر', role: 'employee' };
 
   const renderContent = () => {
     // 1. Restaurant Detail View
@@ -218,6 +205,7 @@ const App: React.FC = () => {
         <RestaurantView 
           restaurant={restaurant}
           users={users}
+          currentUser={activeUser}
           currentOrderItems={currentRestaurantOrders}
           currentDeliveryFee={currentDeliveryFee}
           isOrderLocked={isOrderLocked}
@@ -242,18 +230,26 @@ const App: React.FC = () => {
                  <p className="text-gray-500">من وين حابين تفطروا اليوم؟</p>
               </div>
               <div className="flex gap-2">
-                 {/* Quick Switch User - Excludes Admin */}
+                 {/* User Selection Dropdown */}
                  {users.length > 0 ? (
-                    <select 
-                        className="bg-white border text-sm p-2 rounded-lg cursor-pointer hover:border-brand-dark transition-colors"
-                        onChange={(e) => {
-                            const u = users.find(user => user.id === e.target.value);
-                            if(u) setCurrentUser(u);
-                        }}
-                        value={activeUser.id}
-                    >
-                        {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
+                    <div className="relative">
+                        <select 
+                            className="appearance-none bg-white border border-brand-light/30 text-brand-dark font-bold text-sm py-2 px-4 pr-10 rounded-xl cursor-pointer hover:border-brand-dark transition-colors focus:outline-none focus:ring-2 focus:ring-brand-dark min-w-[150px]"
+                            onChange={(e) => {
+                                const u = users.find(user => user.id === e.target.value);
+                                if(u) setCurrentUser(u);
+                            }}
+                            value={activeUser.id}
+                        >
+                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                         <div className="absolute top-1/2 -translate-y-1/2 right-3 pointer-events-none text-brand-dark">
+                             <UserCircle size={18} />
+                         </div>
+                         <div className="absolute top-1/2 -translate-y-1/2 left-3 pointer-events-none text-brand-light">
+                             <ChevronDown size={14} />
+                         </div>
+                    </div>
                  ) : (
                     <span className="text-xs text-red-400 bg-red-50 p-2 rounded">لا يوجد موظفين</span>
                  )}
@@ -323,6 +319,7 @@ const App: React.FC = () => {
           <VotingView 
             polls={polls} 
             currentUser={activeUser} 
+            users={users}
             onVote={handleCastVote}
             onCreatePoll={handleCreatePoll}
             onDeletePoll={handleDeletePoll}
@@ -330,7 +327,7 @@ const App: React.FC = () => {
         );
 
       case 'admin':
-        if (!isAdminLoggedIn) {
+         if (!isAdminLoggedIn) {
           return (
             <div className="flex items-center justify-center h-full">
                <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-brand-light/20">
