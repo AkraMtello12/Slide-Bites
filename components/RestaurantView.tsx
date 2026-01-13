@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Minus, ShoppingBag, ChevronDown, ArrowRight, Truck, Edit3, CheckCircle, Receipt, X, Lock, StopCircle } from 'lucide-react';
+import { Plus, Minus, ShoppingBag, ChevronDown, ArrowRight, Truck, Edit3, CheckCircle, Receipt, X, Lock, StopCircle, Trash2, Trash } from 'lucide-react';
 import { Restaurant, User, OrderItem, MenuItem } from '../types';
 
 interface RestaurantViewProps {
@@ -88,6 +88,27 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
     onUpdateOrder(restaurant.id, newOrders, currentDeliveryFee);
   };
 
+  const handleClearUserOrder = (userId: string) => {
+    if (isOrderLocked) return;
+    if (window.confirm("هل أنت متأكد من حذف كامل طلبك؟")) {
+        // Filter out items belonging to this user
+        const newOrders = myOrders.filter(o => o.userId !== userId);
+        onUpdateOrder(restaurant.id, newOrders, currentDeliveryFee);
+    }
+  };
+
+  const handleClearAllOrders = () => {
+      const confirmMsg = isOrderLocked 
+        ? "هل انتهيتم من هذا الطلب؟ سيتم حذف القائمة بالكامل وتجهيزها لطلب جديد."
+        : "تحذير: سيتم حذف جميع طلبات الموظفين وتصفير القائمة. هل أنت متأكد؟";
+
+      if (window.confirm(confirmMsg)) {
+          onUpdateOrder(restaurant.id, [], 0); // Clear items and fee
+          onToggleLock(restaurant.id, false); // Unlock
+          setModalState('closed');
+      }
+  };
+
   const handleOpenNoteEditor = (orderItem: OrderItem) => {
       if (isOrderLocked) return;
       setEditingNoteFor({ itemId: orderItem.itemId, userId: orderItem.userId });
@@ -118,7 +139,7 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
   const handleStopReceivingOrders = () => {
       if (window.confirm("هل أنت متأكد من إيقاف استلام الطلبات؟ لن يتمكن أحد من التعديل بعد الآن.")) {
           onToggleLock(restaurant.id, true);
-          setModalState('closed');
+          // Keep modal open or close? Let's keep it open to show status
       }
   };
 
@@ -266,7 +287,20 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
                   return (
                     <div key={userId} className={`bg-white rounded-xl p-3 border shadow-sm transition-all ${userId === activeUserId ? 'border-brand-light ring-1 ring-brand-light' : 'border-gray-100'}`}>
                         <div className="flex justify-between items-center mb-2 border-b border-dashed border-gray-200 pb-2">
-                            <h4 className="font-bold text-brand-dark">{userOrder.name}</h4>
+                            <div className="flex flex-col">
+                                <h4 className="font-bold text-brand-dark">{userOrder.name}</h4>
+                                {/* Delete Personal Order Button */}
+                                {!isOrderLocked && activeUserId === userId && (
+                                    <button 
+                                        onClick={() => handleClearUserOrder(userId)}
+                                        className="text-[10px] text-red-400 hover:text-red-600 flex items-center gap-1 mt-1 font-bold"
+                                        title="حذف جميع طلباتي"
+                                    >
+                                        <Trash2 size={12} />
+                                        <span>حذف طلبي</span>
+                                    </button>
+                                )}
+                            </div>
                             <div className="text-left">
                                 <span className="text-sm font-bold text-brand-light block">{finalUserTotal.toLocaleString()}</span>
                                 {deliveryPerUser > 0 && (
@@ -437,17 +471,35 @@ const RestaurantView: React.FC<RestaurantViewProps> = ({
                       </div>
                       
                       {!isOrderLocked ? (
-                          <button 
-                              onClick={handleStopReceivingOrders}
-                              className="w-full bg-red-500 text-white py-4 rounded-xl font-bold text-lg hover:bg-red-600 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-                          >
-                              <StopCircle size={24} />
-                              <span>إيقاف استلام الطلبات (قفل القائمة)</span>
-                          </button>
+                          <div className="space-y-3">
+                            <button 
+                                onClick={handleStopReceivingOrders}
+                                className="w-full bg-red-500 text-white py-4 rounded-xl font-bold text-lg hover:bg-red-600 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                            >
+                                <StopCircle size={24} />
+                                <span>إيقاف استلام الطلبات (قفل القائمة)</span>
+                            </button>
+                            <button 
+                                onClick={handleClearAllOrders}
+                                className="w-full bg-gray-100 text-gray-500 py-2 rounded-lg font-bold hover:bg-gray-200 transition-all text-sm flex items-center justify-center gap-2"
+                            >
+                                <Trash size={16} />
+                                <span>تصفير القائمة بالكامل (بدء من جديد)</span>
+                            </button>
+                          </div>
                       ) : (
-                          <div className="w-full bg-gray-100 text-gray-500 py-4 rounded-xl font-bold text-lg text-center flex items-center justify-center gap-2">
-                              <Lock size={20} />
-                              <span>الطلب مغلق حالياً</span>
+                          <div className="space-y-3">
+                             <div className="w-full bg-gray-100 text-gray-500 py-4 rounded-xl font-bold text-lg text-center flex items-center justify-center gap-2">
+                                <Lock size={20} />
+                                <span>الطلب مغلق حالياً</span>
+                             </div>
+                             <button 
+                                onClick={handleClearAllOrders}
+                                className="w-full border-2 border-red-100 text-red-400 py-3 rounded-xl font-bold hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Trash size={18} />
+                                <span>إنهاء وحذف القائمة بالكامل</span>
+                            </button>
                           </div>
                       )}
                   </div>
